@@ -62,8 +62,10 @@
     - When a command times out, the server automatically attempts to abort the running process before closing the connection
   - **Max Command Length Configuration:**
     - Max command characters are configured via `--maxChars`
-    - Default: `1000`
-    - No-limit mode: set `--maxChars=none` or any `<= 0` value (e.g. `--maxChars=0`)
+    - Default: no limit. SSH imposes none of its own, and a cap sits between the caller and the shell with no way to negotiate it - a heredoc or a one-line script is refused outright rather than split or streamed
+    - Set `--maxChars=<positive integer>` to enforce a limit
+    - `--maxChars=none` or any `<= 0` value (e.g. `--maxChars=0`) is an explicit no-limit
+    - A value that is none of those is a startup error, not a silent fallback
 
 ## Installation
 
@@ -92,7 +94,7 @@ You can configure your IDE or LLM like Cursor, Windsurf, Claude Desktop to use t
 - `sudoPassword`: Password for sudo elevation (when executing commands with sudo)
 - `suPassword`: Password for su elevation (when you need a persistent root shell)
 - `timeout`: Command execution timeout in milliseconds (default: 60000ms = 1 minute)
-- `maxChars`: Maximum allowed characters for the `command` input (default: 1000). Use `none` or `0` to disable the limit.
+- `maxChars`: Maximum allowed characters for the `command` input (default: no limit). Pass a positive integer to enforce one; `none` or `0` is an explicit no-limit.
 - `disableSudo`: Flag to disable the `sudo-exec` tool completely. Useful when sudo access is not needed or not available.
 
 

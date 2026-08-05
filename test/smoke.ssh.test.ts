@@ -14,22 +14,17 @@ describe('ssh smoke', () => {
 });
 
 describe('maxChars configuration', () => {
-  describe('default behavior (1000 chars)', () => {
-    it('allows commands under 1000 characters', () => {
+  describe('default behavior (no limit)', () => {
+    it('allows a short command', () => {
       const shortCommand = 'echo hello world';
       expect(() => sanitizeCommand(shortCommand)).not.toThrow();
       expect(sanitizeCommand(shortCommand)).toBe(shortCommand);
     });
 
-    it('rejects commands over 1000 characters', () => {
-      const longCommand = 'echo ' + 'x'.repeat(1000);
-      expect(() => sanitizeCommand(longCommand)).toThrow('Command is too long (max 1000 characters)');
-    });
-
-    it('allows exactly 1000 characters', () => {
-      const exactCommand = 'x'.repeat(1000);
-      expect(() => sanitizeCommand(exactCommand)).not.toThrow();
-      expect(sanitizeCommand(exactCommand)).toBe(exactCommand);
+    it('allows a command far past the old 1000-character cap', () => {
+      const longCommand = 'echo ' + 'x'.repeat(20000);
+      expect(() => sanitizeCommand(longCommand)).not.toThrow();
+      expect(sanitizeCommand(longCommand)).toBe(longCommand);
     });
   });
 

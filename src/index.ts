@@ -37,30 +37,39 @@ const SUDOPASSWORD = argvConfig.sudoPassword;
 const DISABLE_SUDO = argvConfig.disableSudo !== undefined;
 const KEY = argvConfig.key;
 const DEFAULT_TIMEOUT = argvConfig.timeout ? parseInt(argvConfig.timeout) : 60000; // 60 seconds default timeout
+export const NO_LIMIT = Infinity;
+
 // Max characters configuration:
-// - Default: 1000 characters
+// - Unset: no limit. SSH imposes none of its own, and a cap sits between the
+//   caller and the shell with no way to negotiate it - a heredoc or a one-line
+//   script is refused outright rather than split or streamed.
 // - When set via --maxChars:
 //   * a positive integer enforces that limit
-//   * 0 or a negative value disables the limit (no max)
-//   * the string "none" (case-insensitive) disables the limit (no max)
-const MAX_CHARS_RAW = argvConfig.maxChars;
-const MAX_CHARS = (() => {
-  if (typeof MAX_CHARS_RAW === 'string') {
-    const lowered = MAX_CHARS_RAW.toLowerCase();
-    if (lowered === 'none') return Infinity;
-    const parsed = parseInt(MAX_CHARS_RAW);
-    if (isNaN(parsed)) return 1000;
-    if (parsed <= 0) return Infinity;
-    return parsed;
-  }
-  return 1000;
-})();
+//   * 0 or a negative value is an explicit no-limit
+//   * the string "none" (case-insensitive) is an explicit no-limit
+// Returns null for a value that is none of those, so a typo becomes a startup
+// error rather than a silent fallback to some cap nobody asked for.
+export function parseMaxChars(raw: string | null | undefined): number | null {
+  if (raw === undefined) return NO_LIMIT;
+  // `--maxChars` with no `=value` parses to null and means nothing on its own.
+  if (raw === null) return null;
+  const value = raw.trim().toLowerCase();
+  if (value === 'none') return NO_LIMIT;
+  if (!/^[+-]?\d+$/.test(value)) return null;
+  const parsed = parseInt(value, 10);
+  return parsed <= 0 ? NO_LIMIT : parsed;
+}
+
+const MAX_CHARS = parseMaxChars(argvConfig.maxChars) ?? NO_LIMIT;
 
 function validateConfig(config: Record<string, string | null>) {
   const errors = [];
   if (!config.host) errors.push('Missing required --host');
   if (!config.user) errors.push('Missing required --user');
   if (config.port && isNaN(Number(config.port))) errors.push('Invalid --port');
+  if (parseMaxChars(config.maxChars) === null) {
+    errors.push('Invalid --maxChars (expected a positive integer, 0, or "none")');
+  }
   if (errors.length > 0) {
     throw new Error('Configuration error:\n' + errors.join('\n'));
   }
