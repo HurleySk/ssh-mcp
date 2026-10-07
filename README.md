@@ -87,6 +87,8 @@ You can configure your IDE or LLM like Cursor, Windsurf, Claude Desktop to use t
 - `host`: Hostname or IP of the Linux or Windows server
 - `user`: SSH username
 
+If `host` or `user` is missing or still a placeholder from these examples (`YOUR_HOST`, `your-user`, `<host>`), the server exits at once with a one-line error on stderr, so your MCP client shows it as failed rather than offering tools that cannot connect. Replace every `YOUR_...` value below with a real one.
+
 **Optional Parameters:**
 - `port`: SSH port (default: 22)
 - `password`: SSH password (or use `key` for key-based auth)

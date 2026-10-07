@@ -62,21 +62,38 @@ export function parseMaxChars(raw: string | null | undefined): number | null {
 
 const MAX_CHARS = parseMaxChars(argvConfig.maxChars) ?? NO_LIMIT;
 
+// A placeholder is example text copied from the docs instead of a real value:
+// anything wrapped in angle brackets (<host>), or "your" then "-" or "_" then
+// letters only (YOUR_HOST, your-user). your-server.example.com still passes.
+export function isPlaceholder(value: string): boolean {
+  return /^<[^>]*>$|^your[-_][a-z_-]+$/i.test(value.trim());
+}
+
 function validateConfig(config: Record<string, string | null>) {
   const errors = [];
-  if (!config.host) errors.push('Missing required --host');
-  if (!config.user) errors.push('Missing required --user');
+  for (const key of ['host', 'user']) {
+    const value = config[key];
+    if (!value) errors.push(`Missing required --${key}`);
+    else if (isPlaceholder(value)) errors.push(`--${key}=${value} is a placeholder, not a real value`);
+  }
   if (config.port && isNaN(Number(config.port))) errors.push('Invalid --port');
   if (parseMaxChars(config.maxChars) === null) {
     errors.push('Invalid --maxChars (expected a positive integer, 0, or "none")');
   }
   if (errors.length > 0) {
-    throw new Error('Configuration error:\n' + errors.join('\n'));
+    throw new Error('Configuration error: ' + errors.join('; '));
   }
 }
 
+// Exit before the transport starts, so the MCP client shows the server as
+// failed instead of an idle server whose tools can never work.
 if (isCliEnabled) {
-  validateConfig(argvConfig);
+  try {
+    validateConfig(argvConfig);
+  } catch (err: any) {
+    console.error(`ssh-mcp: ${err.message}`);
+    process.exit(1);
+  }
 }
 
 // Command sanitization and validation
