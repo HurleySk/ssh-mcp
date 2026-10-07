@@ -67,6 +67,12 @@
     - `--maxChars=none` or any `<= 0` value (e.g. `--maxChars=0`) is an explicit no-limit
     - A value that is none of those is a startup error, not a silent fallback
 
+### Results
+
+Both tools return the command's stdout, followed by any stderr under a `[stderr]` line. Success or failure comes from the exit code alone:
+- Exit code 0 is a success, even when the command wrote to stderr (warnings, git progress)
+- A non-zero exit code or a signal marks the result `isError: true` and ends the text with `[exit code N]` (or `[killed by SIG...]`), keeping whatever stdout and stderr the command produced
+
 ## Installation
 
 1. **Clone the repository:**

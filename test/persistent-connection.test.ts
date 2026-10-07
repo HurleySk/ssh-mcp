@@ -140,13 +140,22 @@ describe('SSHConnectionManager', () => {
       expect(manager.isConnected()).toBe(true);
     }, 30000);
 
-    it('should handle command with stderr', async () => {
+    it('should report a failing command as an error result with its stderr', async () => {
       await manager.connect();
-      
-      // This command writes to stderr
-      await expect(
-        execSshCommandWithConnection(manager, 'echo "error" >&2 && exit 1')
-      ).rejects.toThrow();
+
+      const result: any = await execSshCommandWithConnection(manager, 'echo "error" >&2 && exit 1');
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('error');
+      expect(result.content[0].text).toContain('exit code 1');
+    }, 30000);
+
+    it('should treat stderr output from a successful command as success', async () => {
+      await manager.connect();
+
+      const result: any = await execSshCommandWithConnection(manager, 'echo "warning" >&2; echo "out"');
+      expect(result.isError).toBeFalsy();
+      expect(result.content[0].text).toContain('out');
+      expect(result.content[0].text).toContain('warning');
     }, 30000);
 
     it('should close connection properly', async () => {
@@ -354,9 +363,9 @@ describe('SSHConnectionManager', () => {
         await manager.connect();
         
         // Execute invalid command
-        await expect(
-          execSshCommandWithConnection(manager, 'this-command-does-not-exist-12345')
-        ).rejects.toThrow();
+        const failed: any = await execSshCommandWithConnection(manager, 'this-command-does-not-exist-12345');
+        expect(failed.isError).toBe(true);
+        expect(failed.content[0].text).toContain('exit code 127');
         
         // Connection should still be alive for next command
         expect(manager.isConnected()).toBe(true);

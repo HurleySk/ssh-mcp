@@ -522,6 +522,25 @@ if (!DISABLE_SUDO) {
   );
 }
 
+// Success or failure comes from the exit code alone. stderr is returned either
+// way, since warnings and progress output on stderr are not failures.
+export function execResult(stdout: string, stderr: string, code: number | null | undefined, signal?: string) {
+  const failed = code !== 0;
+  let text = stdout;
+  const append = (part: string) => {
+    if (text && !text.endsWith('\n')) text += '\n';
+    text += part;
+  };
+  if (stderr) append(`[stderr]\n${stderr}`);
+  if (failed) {
+    append(signal ? `[killed by ${signal}]` : code == null ? '[no exit status]' : `[exit code ${code}]`);
+  }
+  return {
+    content: [{ type: 'text' as const, text }],
+    ...(failed ? { isError: true } : {}),
+  };
+}
+
 // New function that uses persistent connection
 export async function execSshCommandWithConnection(manager: SSHConnectionManager, command: string, stdin?: string): Promise<{ [x: string]: unknown; content: ({ [x: string]: unknown; type: "text"; text: string; } | { [x: string]: unknown; type: "image"; data: string; mimeType: string; } | { [x: string]: unknown; type: "audio"; data: string; mimeType: string; } | { [x: string]: unknown; type: "resource"; resource: any; })[] }> {
   return new Promise((resolve, reject) => {
@@ -612,16 +631,7 @@ export async function execSshCommandWithConnection(manager: SSHConnectionManager
         if (!isResolved) {
           isResolved = true;
           clearTimeout(timeoutId);
-          if (stderr) {
-            reject(new McpError(ErrorCode.InternalError, `Error (code ${code}):\n${stderr}`));
-          } else {
-            resolve({
-              content: [{
-                type: 'text',
-                text: stdout,
-              }],
-            });
-          }
+          resolve(execResult(stdout, stderr, code, signal));
         }
       });
     });
@@ -687,16 +697,7 @@ export async function execSshCommand(sshConfig: any, command: string, stdin?: st
             isResolved = true;
             clearTimeout(timeoutId);
             conn.end();
-            if (stderr) {
-              reject(new McpError(ErrorCode.InternalError, `Error (code ${code}):\n${stderr}`));
-            } else {
-              resolve({
-                content: [{
-                  type: 'text',
-                  text: stdout,
-                }],
-              });
-            }
+            resolve(execResult(stdout, stderr, code, signal));
           }
         });
         stream.on('data', (data: Buffer) => {
