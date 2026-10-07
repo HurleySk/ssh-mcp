@@ -59,7 +59,7 @@
   - **Timeout Configuration:**
     - Timeout is configured via command line argument `--timeout` (in milliseconds)
     - Default timeout: 60000ms (1 minute)
-    - When a command times out, the server automatically attempts to abort the running process before closing the connection
+    - When a command times out, the server closes that command's SSH channel and returns an error; the connection stays open for the next command
   - **Max Command Length Configuration:**
     - Max command characters are configured via `--maxChars`
     - Default: no limit. SSH imposes none of its own, and a cap sits between the caller and the shell with no way to negotiate it - a heredoc or a one-line script is refused outright rather than split or streamed

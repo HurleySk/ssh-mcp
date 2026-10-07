@@ -537,6 +537,7 @@ export async function execSshCommandWithConnection(manager: SSHConnectionManager
   return new Promise((resolve, reject) => {
     let timeoutId: NodeJS.Timeout;
     let isResolved = false;
+    let channel: ClientChannel | undefined;
 
     const conn = manager.getConnection();
     const shell = (manager as any).suShell;  // Use su shell if available
@@ -545,6 +546,8 @@ export async function execSshCommandWithConnection(manager: SSHConnectionManager
     timeoutId = setTimeout(() => {
       if (!isResolved) {
         isResolved = true;
+        // Close the channel so the command does not keep running on the shared connection
+        try { channel?.close(); } catch (e) { /* ignore */ }
         reject(new McpError(ErrorCode.InternalError, `Command execution timed out after ${DEFAULT_TIMEOUT}ms`));
       }
     }, DEFAULT_TIMEOUT);
@@ -592,6 +595,7 @@ export async function execSshCommandWithConnection(manager: SSHConnectionManager
         return;
       }
 
+      channel = stream;
       let stdout = '';
       let stderr = '';
 
