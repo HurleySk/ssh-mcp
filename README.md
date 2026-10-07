@@ -72,6 +72,7 @@
 Both tools return the command's stdout, followed by any stderr under a `[stderr]` line. Success or failure comes from the exit code alone:
 - Exit code 0 is a success, even when the command wrote to stderr (warnings, git progress)
 - A non-zero exit code or a signal marks the result `isError: true` and ends the text with `[exit code N]` (or `[killed by SIG...]`), keeping whatever stdout and stderr the command produced
+- With `--suPassword`, commands run in a root shell on a pty, where stderr arrives mixed into stdout; the exit code is still reported the same way
 
 ## Installation
 

@@ -5,6 +5,7 @@ import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { Client, ClientChannel } from 'ssh2';
 import { z } from 'zod';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { randomBytes } from 'crypto';
 
 // Example usage: node build/index.js --host=1.2.3.4 --port=22 --user=root --password=pass --key=path/to/key --timeout=5000 --disableSudo
 function parseArgv() {
@@ -551,37 +552,32 @@ export async function execSshCommandWithConnection(manager: SSHConnectionManager
     // If we have an active su shell, use it directly (commands run as root in session)
     if (shell) {
       let buffer = '';
+      // Output may contain '#', so completion and the exit code come from a
+      // sentinel line echoed after the command. The pty echo of that line
+      // shows a literal $?, so only the shell's real output matches the digits.
+      const marker = `__ssh_mcp_${randomBytes(8).toString('hex')}`;
+      const done = new RegExp(`${marker}:(\\d+)\\r?\\n`);
 
       const dataHandler = (data: Buffer) => {
-        const text = data.toString();
-        buffer += text;
+        buffer += data.toString();
+        const match = done.exec(buffer);
+        if (!match) return;
+        shell.removeListener('data', dataHandler);
+        if (!isResolved) {
+          isResolved = true;
+          clearTimeout(timeoutId);
 
-        // Wait for root prompt (#) to know command is complete
-        // Match # which indicates root prompt (may be followed by spaces, escape codes, etc)
-        if (/#/.test(buffer)) {
-          if (!isResolved) {
-            isResolved = true;
-            clearTimeout(timeoutId);
-
-            // Extract output: remove the command echo and final prompt
-            const lines = buffer.split('\n');
-            // First line is often the echoed command; last line is the prompt
-            let output = lines.slice(1, -1).join('\n');
-
-            resolve({
-              content: [{
-                type: 'text',
-                text: output + (output ? '\n' : ''),
-              }],
-            });
-          }
-          shell.removeListener('data', dataHandler);
+          // First line is the echoed command; the echoed sentinel line and the
+          // prompt before the sentinel output are not command output either
+          const lines = buffer.slice(0, match.index).split('\n');
+          const output = lines.slice(1, -1).filter((line) => !line.includes(marker)).join('\n');
+          resolve(execResult(output + (output ? '\n' : ''), '', Number(match[1])));
         }
       };
 
       shell.on('data', dataHandler);
       // Send command immediately; shell is ready after elevation
-      shell.write(command + '\n');
+      shell.write(`${command}\necho "${marker}:$?"\n`);
       return;
     }
 
