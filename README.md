@@ -53,6 +53,7 @@
     - `description` (optional): What this command will do. Informational only: it is not added to the command, so multi-line commands and heredocs run unchanged
   - **Notes:**
     - Requires `--sudoPassword` to be set for password-protected sudo
+    - The sudo password is sent to `sudo -S` on the command's stdin, so it never appears in the remote command line or in `ps`
     - Can be disabled by passing the `--disableSudo` flag at startup if sudo access is not needed or not available
     - For persistent root access, consider using `--suPassword` instead which establishes a root shell
     - Tool will not be available at all if server is started with `--disableSudo`

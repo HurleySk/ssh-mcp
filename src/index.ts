@@ -492,19 +492,20 @@ if (!DISABLE_SUDO) {
         }
 
         let wrapped: string;
+        let stdin: string | undefined;
         const sudoPassword = connectionManager.getSudoPassword();
 
         if (!sudoPassword) {
           // No password provided, use -n to fail if sudo requires a password
           wrapped = `sudo -n sh -c '${sanitizedCommand.replace(/'/g, "'\\''")}'`;
         } else {
-          // Password provided — pipe it into sudo using printf. This avoids complex
-          // PTY/stdin handling on the SSH channel and is simpler and more reliable.
-          const pwdEscaped = sudoPassword.replace(/'/g, "'\\''");
-          wrapped = `printf '%s\\n' '${pwdEscaped}' | sudo -p "" -S sh -c '${sanitizedCommand.replace(/'/g, "'\\''")}'`;
+          // Password provided: sudo -S reads it from the channel's stdin. It must
+          // stay out of the command line, which ps on the remote host shows.
+          wrapped = `sudo -p "" -S sh -c '${sanitizedCommand.replace(/'/g, "'\\''")}'`;
+          stdin = `${sudoPassword}\n`;
         }
 
-        return await execSshCommandWithConnection(connectionManager, wrapped);
+        return await execSshCommandWithConnection(connectionManager, wrapped, stdin);
       } catch (err: any) {
         if (err instanceof McpError) throw err;
         throw new McpError(ErrorCode.InternalError, `Unexpected error: ${err?.message || err}`);
