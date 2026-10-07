@@ -126,12 +126,6 @@ function sanitizePassword(password: string | undefined): string | undefined {
   return password;
 }
 
-// Escape command for use in shell contexts (like pkill)
-export function escapeCommandForShell(command: string): string {
-  // Replace single quotes with escaped single quotes
-  return command.replace(/'/g, "'\"'\"'");
-}
-
 // SSH Connection Manager to maintain persistent connection
 export interface SSHConfig {
   host: string;
@@ -533,6 +527,19 @@ export function execResult(stdout: string, stderr: string, code: number | null |
   };
 }
 
+// On timeout, a KILL signal request makes OpenSSH kill the command's own
+// process group (each exec is its own session), then the channel is closed.
+// ssh2's channel.signal() drops the request after stdin EOF, which every
+// command here sends, so it goes through ssh2's protocol layer instead.
+function abortChannel(channel: ClientChannel | undefined) {
+  if (!channel) return;
+  try {
+    const ch = channel as any;
+    ch._client._protocol.signal(ch.outgoing.id, 'KILL');
+  } catch (e) { /* ignore */ }
+  try { channel.close(); } catch (e) { /* ignore */ }
+}
+
 // New function that uses persistent connection
 export async function execSshCommandWithConnection(manager: SSHConnectionManager, command: string, stdin?: string): Promise<{ [x: string]: unknown; content: ({ [x: string]: unknown; type: "text"; text: string; } | { [x: string]: unknown; type: "image"; data: string; mimeType: string; } | { [x: string]: unknown; type: "audio"; data: string; mimeType: string; } | { [x: string]: unknown; type: "resource"; resource: any; })[] }> {
   return new Promise((resolve, reject) => {
@@ -547,8 +554,7 @@ export async function execSshCommandWithConnection(manager: SSHConnectionManager
     timeoutId = setTimeout(() => {
       if (!isResolved) {
         isResolved = true;
-        // Close the channel so the command does not keep running on the shared connection
-        try { channel?.close(); } catch (e) { /* ignore */ }
+        abortChannel(channel);
         reject(new McpError(ErrorCode.InternalError, `Command execution timed out after ${DEFAULT_TIMEOUT}ms`));
       }
     }, DEFAULT_TIMEOUT);
@@ -635,28 +641,14 @@ export async function execSshCommand(sshConfig: any, command: string, stdin?: st
     const conn = new Client();
     let timeoutId: NodeJS.Timeout;
     let isResolved = false;
+    let channel: ClientChannel | undefined;
 
     // Set up timeout
     timeoutId = setTimeout(() => {
       if (!isResolved) {
         isResolved = true;
-        // Try to abort the running command before closing connection
-        const abortTimeout = setTimeout(() => {
-          // If abort command itself times out, force close connection
-          conn.end();
-        }, 5000); // 5 second timeout for abort command
-
-        conn.exec('timeout 3s pkill -f \'' + escapeCommandForShell(command) + '\' 2>/dev/null || true', (err: Error | undefined, abortStream: ClientChannel | undefined) => {
-          if (abortStream) {
-            abortStream.on('close', () => {
-              clearTimeout(abortTimeout);
-              conn.end();
-            });
-          } else {
-            clearTimeout(abortTimeout);
-            conn.end();
-          }
-        });
+        abortChannel(channel);
+        conn.end();
         reject(new McpError(ErrorCode.InternalError, `Command execution timed out after ${DEFAULT_TIMEOUT}ms`));
       }
     }, DEFAULT_TIMEOUT);
@@ -672,6 +664,7 @@ export async function execSshCommand(sshConfig: any, command: string, stdin?: st
           conn.end();
           return;
         }
+        channel = stream;
         // If stdin provided, write it to the stream and end stdin
         if (stdin && stdin.length > 0) {
           try {

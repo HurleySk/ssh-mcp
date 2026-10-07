@@ -36,8 +36,8 @@
 - Execute shell commands on remote Linux and Windows systems
 - Secure authentication via password or SSH key
 - Built with TypeScript and the official MCP SDK
-- **Configurable timeout protection** with automatic process abortion
-- **Graceful timeout handling** - attempts to kill hanging processes before closing connections
+- **Configurable timeout** (`--timeout`) for every command
+- **Targeted timeout kill** - a timed-out command gets an SSH KILL signal request, which OpenSSH (7.9 and later) applies to that command's own process group only, then its channel is closed. Servers without signal support only have the channel closed, and the command may keep running there. Commands in the `--suPassword` root shell are not killed on timeout
 
 ### Tools
 
@@ -60,7 +60,7 @@
   - **Timeout Configuration:**
     - Timeout is configured via command line argument `--timeout` (in milliseconds)
     - Default timeout: 60000ms (1 minute)
-    - When a command times out, the server closes that command's SSH channel and returns an error; the connection stays open for the next command
+    - When a command times out, the server asks sshd to kill it (see Targeted timeout kill above), closes that command's SSH channel and returns an error; the connection stays open for the next command
   - **Max Command Length Configuration:**
     - Max command characters are configured via `--maxChars`
     - Default: no limit. SSH imposes none of its own, and a cap sits between the caller and the shell with no way to negotiate it - a heredoc or a one-line script is refused outright rather than split or streamed

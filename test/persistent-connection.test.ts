@@ -158,6 +158,23 @@ describe('SSHConnectionManager', () => {
       expect(result.content[0].text).toContain('warning');
     }, 30000);
 
+    it('should kill a timed-out command on the remote host', async () => {
+      await manager.connect();
+      const seconds = 600000 + Math.floor(Math.random() * 99999);
+
+      await expect(
+        execSshCommandWithConnection(manager, `sleep ${seconds}`)
+      ).rejects.toThrow('timed out');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // [s]leep matches the sleep process but not this check's own command line
+      const check: any = await execSshCommandWithConnection(
+        manager,
+        `cat /proc/[0-9]*/cmdline 2>/dev/null | tr '\\0' ' ' | grep -c '[s]leep ${seconds}' || true`
+      );
+      expect(check.content[0].text.trim()).toBe('0');
+    }, 90000);
+
     it('should close connection properly', async () => {
       await manager.connect();
       expect(manager.isConnected()).toBe(true);
